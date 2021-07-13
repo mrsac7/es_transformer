@@ -16,7 +16,8 @@ class Transformer(object):
     # Threshold size in megabytes (= 10 GB)
     THRESHOLD = 10000
     # Initial epoch
-    OUTSET = "2021-06-01T00:00:00.000Z"
+    TARGET_OUTSET = "2021-06-01T00:00:00.000Z"
+    SOURCE_OUTSET = "2021-06-01 00:00:00.000"
 
     def __init__(self, host="localhost", port=9200):
         """
@@ -67,7 +68,7 @@ class Transformer(object):
         response = self.client.cat.count(target_config, params={"format": "json"})
 
         if int(response[0]["count"]) == 0:
-            self.__create_new_index(index, 1, self.OUTSET)
+            self.__create_new_index(index, 1, self.TARGET_OUTSET)
             self.client.indices.refresh(target_config)
             print(
                 "Created `{}` index for storing metadata of target".format(
@@ -89,7 +90,14 @@ class Transformer(object):
         if not self.client.indices.exists(source_config):
             body = {
                 "settings": {"number_of_shards": 1, "number_of_replicas": 1},
-                "mappings": {"properties": {"timestamp": {"type": "date"}}},
+                "mappings": {
+                    "properties": {
+                        "timestamp": {
+                            "type": "date",
+                            "format": "yyyy-MM-dd HH:mm:ss.SSS",
+                        }
+                    }
+                },
             }
             try:
                 self.client.indices.create(index=source_config, body=body)
@@ -101,7 +109,7 @@ class Transformer(object):
 
         if int(response[0]["count"]) == 0:
             self.client.index(
-                index=source_config, body={"timestamp": self.OUTSET}, id=1
+                index=source_config, body={"timestamp": self.SOURCE_OUTSET}, id=1
             )
             self.client.indices.refresh(source_config)
             print(
@@ -201,7 +209,8 @@ class Transformer(object):
 
         search_body = {
             "size": batch_size,
-            "query": {"range": {"timestamp": {"gte": timestamp}}},
+            "query": {"range": {"timestamp": {"gt": timestamp}}},
+            "sort": [{"timestamp": "asc"}],
         }
         response = self.client.search(
             index=source,
@@ -213,8 +222,8 @@ class Transformer(object):
         print("Documents reindexing started...")
 
         while len(response["hits"]["hits"]):
-            documents = self.parse(response["hits"]["hits"])
-            new_timestamp = self.insert(target, documents, batch_size)
+            documents, new_timestamp = self.parse(response["hits"]["hits"])
+            self.insert(target, documents, batch_size)
 
             if new_timestamp > timestamp:
                 self.client.update(
@@ -231,8 +240,7 @@ class Transformer(object):
 
     def insert(self, index, documents, batch_size=10000):
         """
-        Sends request for inserting data into the elasticsearch database and
-        returns the maximum timestamp of the documents ingested.
+        Sends request for inserting data into the elasticsearch database.
 
         Parameters
         ----------
@@ -242,16 +250,9 @@ class Transformer(object):
             The list of documents that is to be inserted
         batch_size : int, optional
             Batch size for indexing (default is 10000)
-
-        Returns
-        -------
-        str (timestamp)
-            max value of the request_time among the documents.
         """
         actions = []
         latest_index_id, begin_timestamp = self.__get_latest_index(index)
-        max_timestamp = ""
-        current_max_timestamp = ""
 
         for idx, doc in enumerate(documents):
             index_id = latest_index_id
@@ -262,12 +263,8 @@ class Transformer(object):
             action = {"_index": index + "_" + str(index_id), "_source": doc}
             actions.append(action)
 
-            current_max_timestamp = max(current_max_timestamp, doc["request_time"])
-
             if len(actions) == batch_size or idx == len(documents) - 1:
                 bulk(self.client, actions, raise_on_error=True)
-
-                max_timestamp = max(max_timestamp, current_max_timestamp)
                 actions.clear()
 
                 if self.__get_index_size(index, latest_index_id) >= self.THRESHOLD:
@@ -277,8 +274,6 @@ class Transformer(object):
                     latest_index_id = self.__create_new_index(
                         index, latest_index_id + 1, begin_timestamp
                     )
-
-        return max_timestamp
 
     def parse(self, documents):
         """
@@ -292,17 +287,19 @@ class Transformer(object):
 
         Returns
         -------
-        list
-            A list of dictionaries containing the parsed data
+        tuple (list, str)
+            A list of dictionaries containing the parsed data, and
+            max value of the timestamp among the documents.
         """
 
         parsed_documents = []
+        max_timestamp = ""
         for data in documents:
             log = data["_source"]
 
             if "time_taken" not in log or "@timestamp" not in log:
                 continue
-
+            
             duration = log["time_taken"]
             request_time = log["@timestamp"]
             partner_id, client_id, user_id = self.__extract_user_context(log)
@@ -324,7 +321,9 @@ class Transformer(object):
             }
             parsed_documents.append(doc)
 
-        return parsed_documents
+            max_timestamp = max(max_timestamp, log["timestamp"])
+
+        return parsed_documents, max_timestamp
 
     @staticmethod
     def __extract_user_context(log):
