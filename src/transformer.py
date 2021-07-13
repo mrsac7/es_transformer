@@ -13,9 +13,7 @@ class Transformer(object):
     elasticsearch server.
     """
 
-    # Threshold size in megabytes (= 10 GB)
     THRESHOLD = 10000
-    # Initial epoch
     TARGET_OUTSET = "2021-06-01T00:00:00.000Z"
     SOURCE_OUTSET = "2021-06-01 00:00:00.000"
 
@@ -121,7 +119,7 @@ class Transformer(object):
     def create_ingest_pipeline(self, index):
         """
         Creates an ingest pipeline which puts a timestamp when a docuemnts is
-        initially indexed.
+        indexed.
 
         Parameters
         ----------
@@ -203,6 +201,18 @@ class Transformer(object):
                 print("Failed to create index template.")
 
     def reindex(self, source, target, batch_size=10000):
+        """
+        Fetches documents from the source, parses and inserts into the target.
+        
+        Parameters
+        ----------
+        source : str
+            The name of the source index
+        target : str
+            The name of the target index
+        batch_size : int
+            Batch size for fetching documents (default is 10000)
+        """
         source_config = target + ".source_config"
         result = self.client.get(index=source_config, id=1)
         timestamp = result["_source"]["timestamp"]
