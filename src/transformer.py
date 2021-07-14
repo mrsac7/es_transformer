@@ -210,7 +210,7 @@ class Transformer(object):
                 print(e)
                 print("Failed to create index template.")
 
-    def reindex(self, source, target, batch_size=10000):
+    def reindex(self, source, target, batch_size=1000):
         """
         Fetches documents from the source, parses and inserts into the target.
 
@@ -221,7 +221,7 @@ class Transformer(object):
         target : str
             The name of the target index
         batch_size : int
-            Batch size for fetching documents (default is 10000)
+            Batch size for fetching documents (default is 1000)
         """
         source_config = target + ".source_config"
         result = self.client.get(index=source_config, doc_type="config", id=1)
@@ -241,9 +241,12 @@ class Transformer(object):
 
         print("Documents reindexing started...")
 
+        count = 0
         while len(response["hits"]["hits"]):
             documents, new_timestamp = self.parse(response["hits"]["hits"])
             self.insert(target, documents)
+            count += len(documents)
+            print("Inserted {} Documents".format(count))
 
             if new_timestamp > timestamp:
                 self.client.update(
@@ -254,12 +257,13 @@ class Transformer(object):
                 )
                 timestamp = new_timestamp
 
+            return
             response = self.source.scroll(scroll_id=prev_scroll_id, scroll="10m")
             scroll_id = response["_scroll_id"]
 
         print("Documents reindexing finished successfully.")
 
-    def insert(self, index, documents, batch_size=1000):
+    def insert(self, index, documents, batch_size=500):
         """
         Sends request for inserting data into the elasticsearch database.
 
@@ -270,7 +274,7 @@ class Transformer(object):
         documents : list
             The list of documents that is to be inserted
         batch_size : int, optional
-            Batch size for indexing (default is 1000)
+            Batch size for indexing (default is 500)
         """
         actions = []
         latest_index_id, begin_timestamp = self.__get_latest_index(index)
