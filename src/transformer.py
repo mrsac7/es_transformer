@@ -294,7 +294,7 @@ class Transformer(object):
 
             if len(actions) == batch_size or idx == len(documents) - 1:
                 print("Bulk ingesting started...")
-                bulk(self.client, actions, raise_on_error=True, request_timeout=30)
+                bulk(self.client, actions, raise_on_error=True, request_timeout=200)
                 actions.clear()
                 print("Bulked ingesting done")
                 if self.__get_index_size(index, latest_index_id) >= self.THRESHOLD:
