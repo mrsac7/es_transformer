@@ -2,3 +2,4 @@
 .DS_Store
 .vscode
 src/main.py
+data/
