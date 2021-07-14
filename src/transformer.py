@@ -32,8 +32,8 @@ class Transformer(object):
         target_server = [{"host": target_ip, "port": port}]
         source_server = [{"host": source_ip, "port": port}]
         try:
-            self.client = Elasticsearch(hosts=target_server)
-            self.source = Elasticsearch(hosts=source_server)
+            self.client = Elasticsearch(hosts=target_server, timeout=300)
+            self.source = Elasticsearch(hosts=source_server, timeout=300)
         except Exception as e:
             print(e)
             print("Failed to establish connection with ES server.")
@@ -210,7 +210,7 @@ class Transformer(object):
                 print(e)
                 print("Failed to create index template.")
 
-    def reindex(self, source, target, batch_size=1000):
+    def reindex(self, source, target, batch_size=1):
         """
         Fetches documents from the source, parses and inserts into the target.
 
@@ -221,7 +221,7 @@ class Transformer(object):
         target : str
             The name of the target index
         batch_size : int
-            Batch size for fetching documents (default is 1000)
+            Batch size for fetching documents (default is 1)
         """
         source_config = target + ".source_config"
         result = self.client.get(index=source_config, doc_type="config", id=1)
@@ -263,7 +263,7 @@ class Transformer(object):
 
         print("Documents reindexing finished successfully.")
 
-    def insert(self, index, documents, batch_size=500):
+    def insert(self, index, documents, batch_size=1):
         """
         Sends request for inserting data into the elasticsearch database.
 
@@ -274,7 +274,7 @@ class Transformer(object):
         documents : list
             The list of documents that is to be inserted
         batch_size : int, optional
-            Batch size for indexing (default is 500)
+            Batch size for indexing (default is 1)
         """
         actions = []
         latest_index_id, begin_timestamp = self.__get_latest_index(index)
@@ -293,9 +293,10 @@ class Transformer(object):
             actions.append(action)
 
             if len(actions) == batch_size or idx == len(documents) - 1:
-                bulk(self.client, actions, raise_on_error=True, request_timeout=300)
+                print("Bulk ingesting started...")
+                bulk(self.client, actions, raise_on_error=True, request_timeout=30)
                 actions.clear()
-
+                print("Bulked ingesting done")
                 if self.__get_index_size(index, latest_index_id) >= self.THRESHOLD:
                     begin_timestamp = self.__update_index_timerange(
                         index, latest_index_id
