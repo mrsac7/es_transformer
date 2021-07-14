@@ -17,20 +17,23 @@ class Transformer(object):
     TARGET_OUTSET = "2021-06-01T00:00:00.000Z"
     SOURCE_OUTSET = "2021-06-01 00:00:00.000"
 
-    def __init__(self, host="localhost", port=9200):
+    def __init__(self, target_ip="localhost", source_ip="localhost"):
         """
         Establishes connection to the elasticsearch server.
 
         Parameters
         ----------
-        host : str, optional
-            The name of the host (default is 'localhost')
-        port : int, optional
-            The port number (default is 9200)
+        target_ip : str, optional
+            ip of the target (default is 'localhost')
+        source_ip : str, optional
+            ip of the source (default is 'localhost')
         """
-        server = [{"host": host, "port": port}]
+        port = 9200
+        target_server = [{"host": target_ip, "port": port}]
+        source_server = [{"host": source_ip, "port": port}]
         try:
-            self.client = Elasticsearch(hosts=server)
+            self.client = Elasticsearch(hosts=target_server)
+            self.source = Elasticsearch(hosts=source_server)
         except Exception as e:
             print(e)
             print("Failed to establish connection with ES server.")
@@ -203,7 +206,7 @@ class Transformer(object):
     def reindex(self, source, target, batch_size=10000):
         """
         Fetches documents from the source, parses and inserts into the target.
-        
+
         Parameters
         ----------
         source : str
@@ -222,7 +225,7 @@ class Transformer(object):
             "query": {"range": {"timestamp": {"gt": timestamp}}},
             "sort": [{"timestamp": "asc"}],
         }
-        response = self.client.search(
+        response = self.source.search(
             index=source,
             body=search_body,
             scroll="10m",
@@ -243,7 +246,7 @@ class Transformer(object):
                 )
                 timestamp = new_timestamp
 
-            response = self.client.scroll(scroll_id=prev_scroll_id, scroll="10m")
+            response = self.source.scroll(scroll_id=prev_scroll_id, scroll="10m")
             scroll_id = response["_scroll_id"]
 
         print("Documents reindexing finished successfully.")
@@ -309,7 +312,7 @@ class Transformer(object):
 
             if "time_taken" not in log or "@timestamp" not in log:
                 continue
-            
+
             duration = log["time_taken"]
             request_time = log["@timestamp"]
             partner_id, client_id, user_id = self.__extract_user_context(log)
@@ -586,14 +589,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "-c", "--config", action="store_true", help="configure metadata for the indices"
     )
-    parser.add_argument("-s", "--source", type=str, help="name of the source index")
+    parser.add_argument(
+        "--source_ip", type=str, default="localhost", help="ip of source"
+    )
+    parser.add_argument("--source", type=str, help="name of the source index")
+
     required = parser.add_argument_group("required arguments")
     required.add_argument(
-        "-t", "--target", type=str, required=True, help="name of the target index"
+        "--target_ip", type=str, default="localhost", help="ip of the target",
+    )
+    required.add_argument(
+        "--target", type=str, required=True, help="name of the target index"
     )
 
-    ts = Transformer()
     args = parser.parse_args()
+    ts = Transformer(args.target_ip, args.source_ip)
 
     if args.config is None and args.source is None:
         print("No action requested, add --config or --source")
@@ -603,7 +613,6 @@ if __name__ == "__main__":
         ts.create_source_config(args.target)
         ts.create_ingest_pipeline(args.target)
         ts.create_index_template(args.target)
-        print("Configuration finished.")
 
     if args.source is not None:
         ts.reindex(args.source, args.target)
