@@ -259,7 +259,7 @@ class Transformer(object):
 
         print("Documents reindexing finished successfully.")
 
-    def insert(self, index, documents, batch_size=10000):
+    def insert(self, index, documents, batch_size=1000):
         """
         Sends request for inserting data into the elasticsearch database.
 
@@ -270,7 +270,7 @@ class Transformer(object):
         documents : list
             The list of documents that is to be inserted
         batch_size : int, optional
-            Batch size for indexing (default is 10000)
+            Batch size for indexing (default is 1000)
         """
         actions = []
         latest_index_id, begin_timestamp = self.__get_latest_index(index)
