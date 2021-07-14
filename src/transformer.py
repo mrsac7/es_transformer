@@ -173,7 +173,7 @@ class Transformer(object):
             The name of the index
         """
         template_name = index + ".template"
-        if not self.client.indices.exists_index_template(name=template_name):
+        if not self.client.indices.exists_template(name=template_name):
             pattern = index + "_*"
             pipeline = index + ".pipeline"
             mapping = {
@@ -200,7 +200,7 @@ class Transformer(object):
                 },
             }
             try:
-                self.client.indices.put_index_template(name=template_name, body=body)
+                self.client.indices.put_template(name=template_name, body=body)
                 print(
                     "Created `{}` for putting mapping on the indices".format(
                         template_name
