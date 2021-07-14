@@ -53,17 +53,17 @@ class Transformer(object):
             body = {
                 "settings": {"number_of_shards": 1, "number_of_replicas": 1},
                 "mappings": {
-                    "properties": {
-                        "index_id": {"type": "long"},
-                        "begin_timestamp": {"type": "date"},  # begin is exclusive
-                        "end_timestamp": {"type": "date"},  # end is inclusive
+                    "config": {
+                        "properties": {
+                            "index_id": {"type": "long"},
+                            "begin_timestamp": {"type": "date"},  # begin is exclusive
+                            "end_timestamp": {"type": "date"},  # end is inclusive
+                        }
                     }
                 },
             }
             try:
-                self.client.indices.create(
-                    index=target_config, doc_type="_doc", body=body
-                )
+                self.client.indices.create(index=target_config, body=body)
             except ElasticsearchException as e:
                 print(e)
                 print("Failed to create target config index.")
@@ -103,9 +103,7 @@ class Transformer(object):
                 },
             }
             try:
-                self.client.indices.create(
-                    index=source_config, doc_type="_doc", body=body
-                )
+                self.client.indices.create(index=source_config, body=body)
             except ElasticsearchException as e:
                 print(e)
                 print("Failed to create source config index")
@@ -114,10 +112,7 @@ class Transformer(object):
 
         if int(response[0]["count"]) == 0:
             self.client.index(
-                index=source_config,
-                doc_type="_doc",
-                body={"timestamp": self.SOURCE_OUTSET},
-                id=1,
+                index=source_config, body={"timestamp": self.SOURCE_OUTSET}, id=1
             )
             self.client.indices.refresh(source_config)
             print(
@@ -224,7 +219,7 @@ class Transformer(object):
             Batch size for fetching documents (default is 10000)
         """
         source_config = target + ".source_config"
-        result = self.client.get(index=source_config, doc_type="_doc", id=1)
+        result = self.client.get(index=source_config, id=1)
         timestamp = result["_source"]["timestamp"]
 
         search_body = {
@@ -248,7 +243,6 @@ class Transformer(object):
             if new_timestamp > timestamp:
                 self.client.update(
                     index=source_config,
-                    doc_type="_doc",
                     id=1,
                     body={"doc": {"timestamp": new_timestamp}},
                 )
@@ -281,11 +275,7 @@ class Transformer(object):
             if doc["request_time"] <= begin_timestamp:
                 index_id = self.get_query_index(index, doc["request_time"])
 
-            action = {
-                "_index": index + "_" + str(index_id),
-                "_type": "_doc",
-                "_source": doc,
-            }
+            action = {"_index": index + "_" + str(index_id), "_source": doc}
             actions.append(action)
 
             if len(actions) == batch_size or idx == len(documents) - 1:
@@ -518,9 +508,9 @@ class Transformer(object):
         index_name = index + "_" + str(index_id)
         target_config = index + ".target_config"
 
-        begin_timestamp = self.client.get(
-            index=target_config, doc_type="_doc", id=index_id
-        )["_source"]["begin_timestamp"]
+        begin_timestamp = self.client.get(index=target_config, id=index_id)["_source"][
+            "begin_timestamp"
+        ]
 
         end_timestamp = self.client.search(
             index=index_name,
@@ -532,7 +522,6 @@ class Transformer(object):
 
         self.client.update(
             index=target_config,
-            doc_type="_doc",
             id=index_id,
             body={
                 "doc": {
@@ -566,7 +555,6 @@ class Transformer(object):
         target_config = index + ".target_config"
         self.client.index(
             index=target_config,
-            doc_type="_doc",
             id=index_id,
             body={"index_id": index_id, "begin_timestamp": begin_timestamp},
         )
@@ -610,7 +598,7 @@ if __name__ == "__main__":
 
     required = parser.add_argument_group("required arguments")
     required.add_argument(
-        "--target_ip", type=str, default="localhost", help="ip of the target"
+        "--target_ip", type=str, default="localhost", help="ip of the target",
     )
     required.add_argument(
         "--target", type=str, required=True, help="name of the target index"
