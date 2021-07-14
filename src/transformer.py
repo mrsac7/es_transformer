@@ -243,7 +243,7 @@ class Transformer(object):
 
         while len(response["hits"]["hits"]):
             documents, new_timestamp = self.parse(response["hits"]["hits"])
-            self.insert(target, documents, batch_size)
+            self.insert(target, documents)
 
             if new_timestamp > timestamp:
                 self.client.update(
