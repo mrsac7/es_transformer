@@ -289,7 +289,7 @@ class Transformer(object):
             actions.append(action)
 
             if len(actions) == batch_size or idx == len(documents) - 1:
-                bulk(self.client, actions, raise_on_error=True)
+                bulk(self.client, actions, raise_on_error=True, timeout=200)
                 actions.clear()
 
                 if self.__get_index_size(index, latest_index_id) >= self.THRESHOLD:
