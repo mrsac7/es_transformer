@@ -330,7 +330,8 @@ class Transformer(object):
                 self.client.index(
                     index=index + "_" + str(index_id),
                     doc_type="docs",
-                    body=doc
+                    body=doc,
+                    request_timeout=300
                 )
                 actions.clear()
                 print("Bulked ingesting done")
@@ -663,6 +664,19 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     ts = Transformer(args.target_ip, args.source_ip)
+
+    target_config = args.target + ".target_config"
+    if ts.client.indices.exists(target_config):
+        ts.client.indices.delete(target_config)
+    
+    source_config = args.target + ".source_config"
+    if ts.client.indices.exists(source_config):
+        ts.client.indices.delete(source_config)
+    
+    template_name = args.target + ".template"
+
+    if ts.client.indices.exists_template(template_name):
+        ts.client.indices.delete_template(template_name)
 
     if args.config is None and args.source is None:
         print("No action requested, add --config or --source")
