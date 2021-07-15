@@ -1,6 +1,6 @@
 import argparse
 import re
-import requests
+# import requests
 
 from elasticsearch import Elasticsearch
 from elasticsearch.client import indices
@@ -32,9 +32,9 @@ class Transformer(object):
         port = 9200
         target_server = [{"host": target_ip, "port": port}]
         source_server = [{"host": source_ip, "port": port}]
-        target_url = "http://" + target_ip + ":" + str(port)
-        response = requests.get(url=target_url).json()["version"]["number"]
-        print("ES version of target is: {}".format(response))
+        # target_url = "http://" + target_ip + ":" + str(port)
+        # response = requests.get(url=target_url).json()["version"]["number"]
+        # print("ES version of target is: {}".format(response))
         try:
             self.client = Elasticsearch(hosts=target_server, timeout=300)
             self.source = Elasticsearch(hosts=source_server, timeout=300)
@@ -233,7 +233,34 @@ class Transformer(object):
 
         search_body = {
             "size": batch_size,
-            "query": {"range": {"timestamp": {"gt": timestamp}}},
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "exists": {
+                                "field": "time_taken"
+                            }
+                        },
+                        {
+                            "exists": {
+                                "field": "@timestamp",
+                            }
+                        },
+                        {
+                            "exists": {
+                                "field": "timestamp"
+                            }
+                        },
+                        {
+                            "range": {
+                                "timestamp": {
+                                    "gt": timestamp
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
             "sort": [{"timestamp": "asc"}],
         }
         response = self.source.search(
