@@ -214,7 +214,7 @@ class Transformer(object):
                 print(e)
                 print("Failed to create index template.")
 
-    def reindex(self, source, target, batch_size=100):
+    def reindex(self, source, target, batch_size=1):
         """
         Fetches documents from the source, parses and inserts into the target.
 
@@ -275,6 +275,7 @@ class Transformer(object):
         count = 0
         while len(response["hits"]["hits"]):
             documents, new_timestamp = self.parse(response["hits"]["hits"])
+            print(documents[:1])
             self.insert(target, documents)
             count += len(documents)
             print("Inserted {} Documents".format(count))
@@ -294,7 +295,7 @@ class Transformer(object):
 
         print("Documents reindexing finished successfully.")
 
-    def insert(self, index, documents, batch_size=100):
+    def insert(self, index, documents, batch_size=1):
         """
         Sends request for inserting data into the elasticsearch database.
 
