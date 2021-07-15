@@ -626,8 +626,7 @@ class Transformer(object):
                 "number_of_replicas": 1,
                 "index.default_pipeline": pipeline_id,
             },
-            "mapping": {
-                "dynamic": "true", 
+            "mappings": {
                 "docs": {
                     "properties": mapping
                 }
@@ -700,7 +699,7 @@ if __name__ == "__main__":
     index_name = args.target + "_1"
     if ts.client.indices.exists(index_name):
         ts.client.indices.delete(index_name)
-        
+
     source_config = args.target + ".source_config"
     if ts.client.indices.exists(source_config):
         ts.client.indices.delete(source_config)
