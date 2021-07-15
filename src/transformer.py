@@ -624,7 +624,7 @@ class Transformer(object):
             "settings": {
                 "number_of_shards": 1,
                 "number_of_replicas": 1,
-                "index.default_pipeline": pipeline_id,
+                # "index.default_pipeline": pipeline_id,
             },
             "mappings": {
                 "docs": {
@@ -717,7 +717,7 @@ if __name__ == "__main__":
 
     if args.config is not None:
         ts.create_ingest_pipeline(args.target)
-        ts.create_index_template(args.target)
+        # ts.create_index_template(args.target)
         ts.create_target_config(args.target)
         ts.create_source_config(args.target)
 
