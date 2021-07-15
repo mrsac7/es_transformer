@@ -1,6 +1,5 @@
 import argparse
 import re
-# import requests
 
 from elasticsearch import Elasticsearch
 from elasticsearch.client import indices
@@ -32,9 +31,6 @@ class Transformer(object):
         port = 9200
         target_server = [{"host": target_ip, "port": port}]
         source_server = [{"host": source_ip, "port": port}]
-        # target_url = "http://" + target_ip + ":" + str(port)
-        # response = requests.get(url=target_url).json()["version"]["number"]
-        # print("ES version of target is: {}".format(response))
         try:
             self.client = Elasticsearch(hosts=target_server, timeout=300)
             self.source = Elasticsearch(hosts=source_server, timeout=300)
@@ -71,6 +67,8 @@ class Transformer(object):
             except ElasticsearchException as e:
                 print(e)
                 print("Failed to create target config index.")
+                ts.shutdown()
+                return
 
         response = self.client.cat.count(target_config, params={"format": "json"})
 
@@ -113,6 +111,8 @@ class Transformer(object):
             except ElasticsearchException as e:
                 print(e)
                 print("Failed to create source config index")
+                ts.shutdown()
+                return
 
         response = self.client.cat.count(source_config, params={"format": "json"})
 
@@ -165,6 +165,7 @@ class Transformer(object):
             except ElasticsearchException as e:
                 print(e)
                 print("Failed to create ingest pipeline.")
+                ts.shutdown()
 
     def create_index_template(self, index):
         """
@@ -213,6 +214,7 @@ class Transformer(object):
             except ElasticsearchException as e:
                 print(e)
                 print("Failed to create index template.")
+                ts.shutdown()
 
     def reindex(self, source, target, batch_size=100):
         """
@@ -275,7 +277,6 @@ class Transformer(object):
         count = 0
         while len(response["hits"]["hits"]):
             documents, new_timestamp = self.parse(response["hits"]["hits"])
-            # print(documents[:1])
             self.insert(target, documents)
             count += len(documents)
             print("Inserted {} Documents".format(count))
@@ -289,7 +290,6 @@ class Transformer(object):
                 )
                 timestamp = new_timestamp
 
-            # return
             response = self.source.scroll(scroll_id=prev_scroll_id, scroll="10m")
             scroll_id = response["_scroll_id"]
 
@@ -327,12 +327,7 @@ class Transformer(object):
             if len(actions) == batch_size or idx == len(documents) - 1:
                 print("Bulk ingesting started...")
                 bulk(self.client, actions, raise_on_error=True, request_timeout=200)
-                # self.client.index(
-                #     index=index + "_" + str(index_id),
-                #     doc_type="docs",
-                #     body=doc,
-                #     request_timeout=300
-                # )
+    
                 actions.clear()
                 print("Bulked ingesting done")
                 if self.__get_index_size(index, latest_index_id) >= self.THRESHOLD:
@@ -441,18 +436,20 @@ class Transformer(object):
         elif "executorName" in log:
             module = log["executorName"]
         elif "http_uri" in log:
-            module = Transformer.__extract_module_from_uri(log["http_uri"])
+            module = Transformer.__extract_module_from_url(log["http_uri"])
+        if module == "UNKNOWN" and "header_referer" in log:
+            module = Transformer.__extract_module_from_url(log["header_referer"])
         return module
 
     @staticmethod
-    def __extract_module_from_uri(uri):
+    def __extract_module_from_url(url):
         """
-        Finds module name given `http_uri` using a text_search
+        Finds module name given url using a text_search
 
         Paramters
         ---------
-        uri : str
-            `http_uri` of the request
+        url : str
+            url of the request
 
         Returns
         -------
@@ -460,37 +457,42 @@ class Transformer(object):
             module of the request
         """
         modules_dict = {
-            "BENCHMARKING": ["BENCHMARKING"],
-            "CARE": ["CARE"],
-            "CASE_MANAGEMENT": ["UNIVERSAL_CASE"],
-            "COMMENT": ["COMMENT"],
-            "ENGAGEMENT": ["ENGAGEMENT"],
-            "GOVERNANCE": ["GOVERNANCE"],
-            "INBOUND_MESSAGE": ["INBOUND_MESSAGE"],
-            "LISTENING": ["LISTENING"],
-            "MARKETING": ["MARKETING"],
-            "METADATA": ["METADATA"],
-            "META_CONTENT": ["META_CONTENT"],
-            "OUTBOUND": ["OUTBOUND"],
-            "OUTBOUND-STREAM-FEED": ["OUTBOUND-STREAM-FEED"],
-            "OUTBOUND_MESSAGE": ["OUTBOUND_MESSAGE"],
-            "PAID": ["PAID"],
-            "PLATFORM": ["PLATFORM"],
-            "PUBLISHING": ["PUBLISHING"],
-            "RDB_FIREHOSE": ["RDB_FIREHOSE"],
-            "REPORTING": ["REPORTING"],
+            "ADVERTISING": ["ADVERTISING", "ADV", "advertising"],
+            "ADVOCACY": ["ADVOCACY", "advocacy"],
+            "AUTOMATION": ["AUT", "automation"],
+            "BENCHMARKING": ["BENCHMARKING", "BMK", "benchmarking"],
+            "CARE": ["CARE", "care"],
+            "CASE_MANAGEMENT": ["UNIVERSAL_CASE", "universal_case"],
+            "COMMENT": ["COMMENT", "comment"],
+            "ENGAGEMENT": ["ENGAGEMENT", "ENG", "engagement"],
+            "GOVERNANCE": ["GOVERNANCE", "GOV", "governance"],
+            "INBOUND_MESSAGE": ["INBOUND_MESSAGE", "inbound_message"],
+            "LISTENING": ["LISTENING", "LST", "listening"],
+            "MARKETING": ["MARKETING", "MKT", "marketing"],
+            "METADATA": ["METADATA", "metadata"],
+            "META_CONTENT": ["META_CONTENT", "meta_content"],
+            "OUTBOUND": ["OUTBOUND", "outbound"],
+            "OUTBOUND-STREAM-FEED": ["OUTBOUND-STREAM-FEED", "outbound-stream-feed"],
+            "OUTBOUND_MESSAGE": ["OUTBOUND_MESSAGE", "outbound_message"],
+            "PAID": ["PAID", "paid"],
+            "PLATFORM": ["PLATFORM", "platform"],
+            "PUBLISHING": ["PUBLISHING", "PUB", "publishing"],
+            "RDB_FIREHOSE": ["RDB_FIREHOSE", "rdb_firehose"],
+            "REPORTING": ["REPORTING", "reporting"],
+            "RESEARCH": ["RESEARCH", "research"],
             "SAM": ["SAM", "/sam/"],
+            "SOCIAL": ["SOCIAL", "social"],
             "spellcheck-grammar": ["spellcheck", "grammar"],
-            "SPR_TASK": ["SPR_TASK"],
-            "SUGGESTION": ["SUGGESTION"],
-            "UGC": ["UGC"],
+            "SPR_TASK": ["SPR_TASK", "spr_task"],
+            "SUGGESTION": ["SUGGESTION", "suggestion"],
+            "UGC": ["UGC", "ugc"],
         }
         matching_module = [
             mod
             for mod in modules_dict
-            if any(keyword in uri for keyword in modules_dict[mod])
+            if any(keyword in url for keyword in modules_dict[mod])
         ]
-        if len(matching_module) == 1:
+        if (len(matching_module)) == 1:
             return matching_module[0]
 
         else:
@@ -586,6 +588,9 @@ class Transformer(object):
             },
         )
         return end_timestamp
+    
+    def shutdown(self):
+        ts.client.transport.close()
 
     def __create_new_index(self, index, index_id, begin_timestamp):
         """
@@ -624,7 +629,6 @@ class Transformer(object):
             "settings": {
                 "number_of_shards": 1,
                 "number_of_replicas": 1,
-                # "index.default_pipeline": pipeline_id,
             },
             "mappings": {
                 "docs": {
@@ -692,34 +696,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     ts = Transformer(args.target_ip, args.source_ip)
 
-    # target_config = args.target + ".target_config"
-    # if ts.client.indices.exists(target_config):
-    #     ts.client.indices.delete(target_config)
-    
-    # index_name = args.target + "_1"
-    # if ts.client.indices.exists(index_name):
-    #     ts.client.indices.delete(index_name)
-
-    # source_config = args.target + ".source_config"
-    # if ts.client.indices.exists(source_config):
-    #     ts.client.indices.delete(source_config)
-    
-    # template_name = args.target + ".template"
-
-    # if ts.client.indices.exists_template(template_name):
-    #     ts.client.indices.delete_template(template_name)
-    
-
-    print("Deleted previous configs.")
-
     if args.config is None and args.source is None:
         print("No action requested, add --config or --source")
 
     if args.config is not None:
-        ts.create_ingest_pipeline(args.target)
-        # ts.create_index_template(args.target)
         ts.create_target_config(args.target)
         ts.create_source_config(args.target)
 
     if args.source is not None:
         ts.reindex(args.source, args.target)
+    
+    ts.shutdown()
