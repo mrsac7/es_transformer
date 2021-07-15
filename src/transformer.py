@@ -411,10 +411,10 @@ class Transformer(object):
             request
         """
         user_context = [
-            log[level] if level in log else "UNKNOWN"
+            log[level] if level in log else -1
             for level in ("partner_id", "client_id", "user_id")
         ]
-        if "UNKNOWN" in user_context and "header_x-user-context" in log:
+        if -1 in user_context and "header_x-user-context" in log:
             regex = re.findall(r"\d+", log["header_x-user-context"])
             user_context = list(map(int, regex))
 
