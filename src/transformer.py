@@ -678,6 +678,8 @@ if __name__ == "__main__":
     if ts.client.indices.exists_template(template_name):
         ts.client.indices.delete_template(template_name)
 
+    print("Deleted previous configs.")
+
     if args.config is None and args.source is None:
         print("No action requested, add --config or --source")
 
