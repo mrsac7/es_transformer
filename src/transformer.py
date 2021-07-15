@@ -607,12 +607,40 @@ class Transformer(object):
         """
         index_name = index + "_" + str(index_id)
         target_config = index + ".target_config"
+        pipeline_id = index + ".pipeline"
+        mapping = {
+                "user_id": {"type": "long"},
+                "client_id": {"type": "long"},
+                "partner_id": {"type": "long"},
+                "module": {"type": "keyword"},
+                "page": {"type": "keyword"},
+                "uri": {"type": "keyword"},
+                "app_type": {"type": "keyword"},
+                "created_at": {"type": "date"},
+                "request_time": {"type": "date"},
+                "duration": {"type": "long"},
+            }
+        body = {
+            "settings": {
+                "number_of_shards": 1,
+                "number_of_replicas": 1,
+                "index.default_pipeline": pipeline_id,
+            },
+            "mapping": {
+                "dynamic": "true", 
+                "docs": {
+                    "properties": mapping
+                }
+            },
+        }
+        self.client.indices.create(index=index_name, body=body)
         self.client.index(
             index=target_config,
             doc_type="config",
             id=index_id,
             body={"index_id": index_id, "begin_timestamp": begin_timestamp},
         )
+
         return index_id
 
     def __get_latest_index(self, index):
@@ -669,6 +697,10 @@ if __name__ == "__main__":
     if ts.client.indices.exists(target_config):
         ts.client.indices.delete(target_config)
     
+    index_name = args.target + "_1"
+    if ts.client.indices.exists(index_name):
+        ts.client.indices.delete(index_name)
+        
     source_config = args.target + ".source_config"
     if ts.client.indices.exists(source_config):
         ts.client.indices.delete(source_config)
@@ -677,6 +709,7 @@ if __name__ == "__main__":
 
     if ts.client.indices.exists_template(template_name):
         ts.client.indices.delete_template(template_name)
+    
 
     print("Deleted previous configs.")
 
@@ -684,10 +717,10 @@ if __name__ == "__main__":
         print("No action requested, add --config or --source")
 
     if args.config is not None:
-        ts.create_target_config(args.target)
-        ts.create_source_config(args.target)
         ts.create_ingest_pipeline(args.target)
         ts.create_index_template(args.target)
+        ts.create_target_config(args.target)
+        ts.create_source_config(args.target)
 
     if args.source is not None:
         ts.reindex(args.source, args.target)
