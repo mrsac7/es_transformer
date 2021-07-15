@@ -214,7 +214,7 @@ class Transformer(object):
                 print(e)
                 print("Failed to create index template.")
 
-    def reindex(self, source, target, batch_size=1):
+    def reindex(self, source, target, batch_size=100):
         """
         Fetches documents from the source, parses and inserts into the target.
 
@@ -275,7 +275,7 @@ class Transformer(object):
         count = 0
         while len(response["hits"]["hits"]):
             documents, new_timestamp = self.parse(response["hits"]["hits"])
-            print(documents[:1])
+            # print(documents[:1])
             self.insert(target, documents)
             count += len(documents)
             print("Inserted {} Documents".format(count))
@@ -289,13 +289,13 @@ class Transformer(object):
                 )
                 timestamp = new_timestamp
 
-            return
+            # return
             response = self.source.scroll(scroll_id=prev_scroll_id, scroll="10m")
             scroll_id = response["_scroll_id"]
 
         print("Documents reindexing finished successfully.")
 
-    def insert(self, index, documents, batch_size=1):
+    def insert(self, index, documents, batch_size=100):
         """
         Sends request for inserting data into the elasticsearch database.
 
@@ -326,13 +326,13 @@ class Transformer(object):
 
             if len(actions) == batch_size or idx == len(documents) - 1:
                 print("Bulk ingesting started...")
-                # bulk(self.client, actions, raise_on_error=True, request_timeout=200)
-                self.client.index(
-                    index=index + "_" + str(index_id),
-                    doc_type="docs",
-                    body=doc,
-                    request_timeout=300
-                )
+                bulk(self.client, actions, raise_on_error=True, request_timeout=200)
+                # self.client.index(
+                #     index=index + "_" + str(index_id),
+                #     doc_type="docs",
+                #     body=doc,
+                #     request_timeout=300
+                # )
                 actions.clear()
                 print("Bulked ingesting done")
                 if self.__get_index_size(index, latest_index_id) >= self.THRESHOLD:
@@ -692,22 +692,22 @@ if __name__ == "__main__":
     args = parser.parse_args()
     ts = Transformer(args.target_ip, args.source_ip)
 
-    target_config = args.target + ".target_config"
-    if ts.client.indices.exists(target_config):
-        ts.client.indices.delete(target_config)
+    # target_config = args.target + ".target_config"
+    # if ts.client.indices.exists(target_config):
+    #     ts.client.indices.delete(target_config)
     
-    index_name = args.target + "_1"
-    if ts.client.indices.exists(index_name):
-        ts.client.indices.delete(index_name)
+    # index_name = args.target + "_1"
+    # if ts.client.indices.exists(index_name):
+    #     ts.client.indices.delete(index_name)
 
-    source_config = args.target + ".source_config"
-    if ts.client.indices.exists(source_config):
-        ts.client.indices.delete(source_config)
+    # source_config = args.target + ".source_config"
+    # if ts.client.indices.exists(source_config):
+    #     ts.client.indices.delete(source_config)
     
-    template_name = args.target + ".template"
+    # template_name = args.target + ".template"
 
-    if ts.client.indices.exists_template(template_name):
-        ts.client.indices.delete_template(template_name)
+    # if ts.client.indices.exists_template(template_name):
+    #     ts.client.indices.delete_template(template_name)
     
 
     print("Deleted previous configs.")
