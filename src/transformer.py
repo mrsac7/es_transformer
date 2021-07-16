@@ -3,7 +3,7 @@ import re
 
 from elasticsearch import Elasticsearch
 from elasticsearch.client import indices
-from elasticsearch.exceptions import ElasticsearchException, NotFoundError
+from elasticsearch.exceptions import NotFoundError
 from elasticsearch.helpers import bulk
 
 
@@ -34,9 +34,9 @@ class Transformer(object):
         try:
             self.client = Elasticsearch(hosts=target_server, timeout=300)
             self.source = Elasticsearch(hosts=source_server, timeout=300)
-        except Exception as e:
-            print(e)
+        except:
             print("Failed to establish connection with ES server.")
+            raise
 
     def create_target_config(self, index):
         """
@@ -64,11 +64,10 @@ class Transformer(object):
             }
             try:
                 self.client.indices.create(index=target_config, body=body)
-            except ElasticsearchException as e:
-                print(e)
+            except:
                 print("Failed to create target config index.")
                 ts.shutdown()
-                return
+                raise
 
         response = self.client.cat.count(target_config, params={"format": "json"})
 
@@ -108,11 +107,10 @@ class Transformer(object):
             }
             try:
                 self.client.indices.create(index=source_config, body=body)
-            except ElasticsearchException as e:
-                print(e)
+            except:
                 print("Failed to create source config index")
                 ts.shutdown()
-                return
+                raise
 
         response = self.client.cat.count(source_config, params={"format": "json"})
 
@@ -162,10 +160,10 @@ class Transformer(object):
                         pipeline_id
                     )
                 )
-            except ElasticsearchException as e:
-                print(e)
+            except:
                 print("Failed to create ingest pipeline.")
                 ts.shutdown()
+                raise
 
     def create_index_template(self, index):
         """
@@ -211,10 +209,10 @@ class Transformer(object):
                         template_name
                     )
                 )
-            except ElasticsearchException as e:
-                print(e)
+            except:
                 print("Failed to create index template.")
                 ts.shutdown()
+                raise
 
     def reindex(self, source, target, batch_size=100):
         """
@@ -265,11 +263,16 @@ class Transformer(object):
             },
             "sort": [{"timestamp": "asc"}],
         }
-        response = self.source.search(
-            index=source,
-            body=search_body,
-            scroll="10m",
-        )
+        try:
+            response = self.source.search(
+                index=source,
+                body=search_body,
+                scroll="10m",
+            )
+        except:
+            print("Could not read the data")
+            raise
+
         prev_scroll_id = response["_scroll_id"]
 
         print("Documents reindexing started...")
@@ -326,10 +329,15 @@ class Transformer(object):
 
             if len(actions) == batch_size or idx == len(documents) - 1:
                 print("Bulk ingesting started...")
-                bulk(self.client, actions, raise_on_error=True, request_timeout=200)
+
+                try:
+                    bulk(self.client, actions, raise_on_error=True, request_timeout=200)
+                except:
+                    print("Could not write the data.")
+                    raise
     
                 actions.clear()
-                print("Bulked ingesting done")
+                print("Bulk ingesting done")
                 if self.__get_index_size(index, latest_index_id) >= self.THRESHOLD:
                     begin_timestamp = self.__update_index_timerange(
                         index, latest_index_id
@@ -590,6 +598,9 @@ class Transformer(object):
         return end_timestamp
     
     def shutdown(self):
+        """
+        Closes connection with the elasticsearch server.
+        """
         ts.client.transport.close()
 
     def __create_new_index(self, index, index_id, begin_timestamp):
