@@ -1,5 +1,5 @@
 # ES Transfomer 
-A Python module that allows users to extract document from a source, parse and ingest into Elasticsearch.
+A Python module that allows users to extract documents from a source, parse and ingest into Elasticsearch.
 
 ## Setting Up
 To setup, install the dependencies with `pip`:
